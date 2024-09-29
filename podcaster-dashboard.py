@@ -96,6 +96,11 @@ html_template = '''
             </div>
         </div>
 
+        <!-- Sum Container -->
+        <div id="sum-container" class="mb-4 text-lg text-gray-300">
+            <!-- Sums will be displayed here -->
+        </div>
+
         <table class="min-w-full bg-gray-800 rounded">
             <thead>
                 <tr>
@@ -157,6 +162,36 @@ html_template = '''
             });
         }
 
+        function updateSums() {
+            const sumContainer = document.getElementById('sum-container');
+            const selectedPodcast = podcastSelect.value;
+            const selectedEpisode = episodeSelect.value;
+
+            let podcastSum = 0;
+            let episodeSum = 0;
+            let sumHtml = '';
+
+            if (selectedPodcast !== '') {
+                // Sum all boosts matching the selected podcast
+                podcastSum = boosts
+                    .filter(boost => boost.podcast === selectedPodcast)
+                    .reduce((sum, boost) => sum + boost.value, 0);
+
+                sumHtml += `<div>Total sats for podcast "<strong>${selectedPodcast}</strong>": <strong>${podcastSum}</strong></div>`;
+            }
+
+            if (selectedEpisode !== '') {
+                // Sum all boosts matching the selected episode
+                episodeSum = boosts
+                    .filter(boost => boost.episode === selectedEpisode)
+                    .reduce((sum, boost) => sum + boost.value, 0);
+
+                sumHtml += `<div>Total sats for episode "<strong>${selectedEpisode}</strong>": <strong>${episodeSum}</strong></div>`;
+            }
+
+            sumContainer.innerHTML = sumHtml;
+        }
+
         function renderTable() {
             const selectedPodcast = podcastSelect.value;
             const selectedEpisode = episodeSelect.value;
@@ -198,6 +233,9 @@ html_template = '''
                     <td class="px-6 py-4 whitespace-nowrap">${boost.value}</td>
                 </tr>
             `).join('');
+
+            // Update sums
+            updateSums();
         }
 
         function sortTable(key) {
