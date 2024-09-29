@@ -3,7 +3,7 @@ Convert core-lightning's listinvoices output to a podcasting 2.0 dashboard
 
 ## Introduction
 
-![screenshot](docs/image.png)
+![screenshot](docs/screenshot.png)
 
 This is a simple Python script that converts core lightning's listinvoices output (which is a JSON file) into a podcasting 2.0 dashboard (static HTML+JavaScript).
 
