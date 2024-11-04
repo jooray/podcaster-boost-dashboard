@@ -165,13 +165,44 @@ html_template = '''
     </div>
 
     <script>
-        const boosts = @boosts_json;
+        let boosts = @boosts_json;
         const podcastSelect = document.getElementById('podcast-select');
         const episodeSelect = document.getElementById('episode-select');
         const onlyMessagesCheckbox = document.getElementById('only-messages');
         const boostsTable = document.getElementById('boosts-table');
         let currentSortKey = 'timestamp';
         let sortAscending = false;
+
+        // Group boosts without messages from the same user for the same episode
+        boosts = boosts.reduce((acc, boost) => {
+            // If the boost has a message, keep it as is
+            if (boost.message && boost.message.trim()) {
+                acc.push(boost);
+                return acc;
+            }
+
+            // Look for an existing boost from the same user for the same episode without a message
+            const existingBoost = acc.find(b =>
+                !b.message &&  // No message
+                b.sender === boost.sender &&  // Same sender
+                b.podcast === boost.podcast &&  // Same podcast
+                b.episode === boost.episode  // Same episode
+            );
+
+            if (existingBoost) {
+                // Update the existing boost
+                existingBoost.value += boost.value;
+                // Update timestamp to the latest one
+                if (boost.timestamp > existingBoost.timestamp) {
+                    existingBoost.timestamp = boost.timestamp;
+                }
+            } else {
+                // Add as a new boost
+                acc.push(boost);
+            }
+
+            return acc;
+        }, []);
 
         const podcastEpisodeMap = {};
         boosts.forEach(boost => {
@@ -180,7 +211,6 @@ html_template = '''
             }
             podcastEpisodeMap[boost.podcast].add(boost.episode);
         });
-
 
         function updateEpisodeOptions() {
             const selectedPodcast = podcastSelect.value;
