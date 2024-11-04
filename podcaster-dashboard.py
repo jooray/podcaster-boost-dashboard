@@ -164,159 +164,166 @@ html_template = '''
         </table>
     </div>
 
-    <script>
-        let boosts = @boosts_json;
-        const podcastSelect = document.getElementById('podcast-select');
-        const episodeSelect = document.getElementById('episode-select');
-        const onlyMessagesCheckbox = document.getElementById('only-messages');
-        const boostsTable = document.getElementById('boosts-table');
-        let currentSortKey = 'timestamp';
-        let sortAscending = false;
+// ... (previous HTML and style content remains the same) ...
 
-        // Group boosts without messages from the same user for the same episode
-        boosts = boosts.reduce((acc, boost) => {
-            // If the boost has a message, keep it as is
-            if (boost.message && boost.message.trim()) {
-                acc.push(boost);
-                return acc;
-            }
+<script>
+    let boosts = @boosts_json;
+    const podcastSelect = document.getElementById('podcast-select');
+    const episodeSelect = document.getElementById('episode-select');
+    const onlyMessagesCheckbox = document.getElementById('only-messages');
+    const boostsTable = document.getElementById('boosts-table');
+    let currentSortKey = 'timestamp';
+    let sortAscending = false;
 
-            // Look for an existing boost from the same user for the same episode without a message
-            const existingBoost = acc.find(b =>
-                !b.message &&  // No message
-                b.sender === boost.sender &&  // Same sender
-                b.podcast === boost.podcast &&  // Same podcast
-                b.episode === boost.episode  // Same episode
-            );
-
-            if (existingBoost) {
-                // Update the existing boost
-                existingBoost.value += boost.value;
-                // Update timestamp to the latest one
-                if (boost.timestamp > existingBoost.timestamp) {
-                    existingBoost.timestamp = boost.timestamp;
-                }
-            } else {
-                // Add as a new boost
-                acc.push(boost);
-            }
-
+    // Group boosts without messages from the same user for the same episode
+    boosts = boosts.reduce((acc, boost) => {
+        // If the boost has a message, keep it as is
+        if (boost.message && boost.message.trim()) {
+            acc.push(boost);
             return acc;
-        }, []);
+        }
 
-        const podcastEpisodeMap = {};
-        boosts.forEach(boost => {
-            if (!podcastEpisodeMap[boost.podcast]) {
-                podcastEpisodeMap[boost.podcast] = new Set();
+        // Look for an existing boost from the same user for the same episode without a message
+        const existingBoost = acc.find(b =>
+            !b.message &&  // No message
+            b.sender === boost.sender &&  // Same sender
+            b.podcast === boost.podcast &&  // Same podcast
+            b.episode === boost.episode  // Same episode
+        );
+
+        if (existingBoost) {
+            // Update the existing boost
+            existingBoost.value += boost.value;
+            // Update timestamp to the latest one
+            if (boost.timestamp > existingBoost.timestamp) {
+                existingBoost.timestamp = boost.timestamp;
             }
-            podcastEpisodeMap[boost.podcast].add(boost.episode);
+        } else {
+            // Add as a new boost
+            acc.push(boost);
+        }
+
+        return acc;
+    }, []);
+
+    const podcastEpisodeMap = {};
+    boosts.forEach(boost => {
+        if (!podcastEpisodeMap[boost.podcast]) {
+            podcastEpisodeMap[boost.podcast] = new Set();
+        }
+        podcastEpisodeMap[boost.podcast].add(boost.episode);
+    });
+
+    function updateEpisodeOptions() {
+        const selectedPodcast = podcastSelect.value;
+        let boostsToConsider = boosts;
+
+        if (selectedPodcast !== '') {
+            boostsToConsider = boostsToConsider.filter(boost => boost.podcast === selectedPodcast);
+        }
+
+        // Build a mapping of episodes to their latest boost timestamp
+        const episodeMap = new Map();
+
+        boostsToConsider.forEach(boost => {
+            const episode = boost.episode;
+            if (episode && episode.trim() !== '') {
+                const timestamp = boost.timestamp;
+                if (!episodeMap.has(episode) || episodeMap.get(episode) < timestamp) {
+                    episodeMap.set(episode, timestamp);
+                }
+            }
         });
 
-        function updateEpisodeOptions() {
-            const selectedPodcast = podcastSelect.value;
-            let boostsToConsider = boosts;
+        // Convert the map to an array and sort by latest timestamp descending
+        const episodes = Array.from(episodeMap.entries())
+            .map(([name, timestamp]) => ({ name, timestamp }))
+            .sort((a, b) => b.timestamp - a.timestamp);
 
-            if (selectedPodcast !== '') {
-                boostsToConsider = boostsToConsider.filter(boost => boost.podcast === selectedPodcast);
-            }
+        episodeSelect.innerHTML = '<option value="">All Episodes</option>';
+        episodes.forEach(episode => {
+            const option = document.createElement('option');
+            option.value = episode.name;
+            option.textContent = episode.name;
+            episodeSelect.appendChild(option);
+        });
+    }
 
-            // Build a mapping of episodes to their latest boost timestamp
-            const episodeMap = new Map();
+    function updateSums() {
+        const sumContainer = document.getElementById('sum-container');
+        const selectedPodcast = podcastSelect.value;
+        const selectedEpisode = episodeSelect.value;
 
-            boostsToConsider.forEach(boost => {
-                const episode = boost.episode;
-                if (episode && episode.trim() !== '') {
-                    const timestamp = boost.timestamp;
-                    if (!episodeMap.has(episode) || episodeMap.get(episode) < timestamp) {
-                        episodeMap.set(episode, timestamp);
-                    }
-                }
-            });
+        let podcastSum = 0;
+        let episodeSum = 0;
+        let podcastUniqueListeners = new Set();
+        let episodeUniqueListeners = new Set();
+        let sumHtml = '';
 
-            // Convert the map to an array and sort by latest timestamp descending
-            const episodes = Array.from(episodeMap.entries())
-                .map(([name, timestamp]) => ({ name, timestamp }))
-                .sort((a, b) => b.timestamp - a.timestamp);
+        if (selectedPodcast !== '') {
+            // Sum all boosts matching the selected podcast
+            podcastSum = boosts
+                .filter(boost => boost.podcast === selectedPodcast)
+                .reduce((sum, boost) => {
+                    podcastUniqueListeners.add(boost.sender);
+                    return sum + boost.value;
+                }, 0);
 
-            episodeSelect.innerHTML = '<option value="">All Episodes</option>';
-            episodes.forEach(episode => {
-                const option = document.createElement('option');
-                option.value = episode.name;
-                option.textContent = episode.name;
-                episodeSelect.appendChild(option);
-            });
+            sumHtml += `<div>Total sats for podcast "<strong>${selectedPodcast}</strong>": <strong>${podcastSum}</strong> from <strong>${podcastUniqueListeners.size}</strong> unique listeners</div>`;
         }
 
-        function updateSums() {
-            const sumContainer = document.getElementById('sum-container');
-            const selectedPodcast = podcastSelect.value;
-            const selectedEpisode = episodeSelect.value;
+        if (selectedEpisode !== '') {
+            // Sum all boosts matching the selected episode
+            episodeSum = boosts
+                .filter(boost => boost.episode === selectedEpisode)
+                .reduce((sum, boost) => {
+                    episodeUniqueListeners.add(boost.sender);
+                    return sum + boost.value;
+                }, 0);
 
-            let podcastSum = 0;
-            let episodeSum = 0;
-            let sumHtml = '';
-
-            if (selectedPodcast !== '') {
-                // Sum all boosts matching the selected podcast
-                podcastSum = boosts
-                    .filter(boost => boost.podcast === selectedPodcast)
-                    .reduce((sum, boost) => sum + boost.value, 0);
-
-                sumHtml += `<div>Total sats for podcast "<strong>${selectedPodcast}</strong>": <strong>${podcastSum}</strong></div>`;
-            }
-
-            if (selectedEpisode !== '') {
-                // Sum all boosts matching the selected episode
-                episodeSum = boosts
-                    .filter(boost => boost.episode === selectedEpisode)
-                    .reduce((sum, boost) => sum + boost.value, 0);
-
-                sumHtml += `<div>Total sats for episode "<strong>${selectedEpisode}</strong>": <strong>${episodeSum}</strong></div>`;
-            }
-
-            sumContainer.innerHTML = sumHtml;
+            sumHtml += `<div>Total sats for episode "<strong>${selectedEpisode}</strong>": <strong>${episodeSum}</strong> from <strong>${episodeUniqueListeners.size}</strong> unique listeners</div>`;
         }
 
+        sumContainer.innerHTML = sumHtml;
+    }
 
-        function renderTable() {
-            const selectedPodcast = podcastSelect.value;
-            const selectedEpisode = episodeSelect.value;
-            const onlyMessages = onlyMessagesCheckbox.checked;
-            let filteredBoosts = boosts.filter(boost => {
-                let match = true;
-                if (selectedPodcast && boost.podcast !== selectedPodcast) match = false;
-                if (selectedEpisode && boost.episode !== selectedEpisode) match = false;
-                if (onlyMessages && (!boost.message || !boost.message.trim())) match = false;
-                return match;
-            });
+    function renderTable() {
+        const selectedPodcast = podcastSelect.value;
+        const selectedEpisode = episodeSelect.value;
+        const onlyMessages = onlyMessagesCheckbox.checked;
+        let filteredBoosts = boosts.filter(boost => {
+            let match = true;
+            if (selectedPodcast && boost.podcast !== selectedPodcast) match = false;
+            if (selectedEpisode && boost.episode !== selectedEpisode) match = false;
+            if (onlyMessages && (!boost.message || !boost.message.trim())) match = false;
+            return match;
+        });
 
-            filteredBoosts.sort((a, b) => {
-                let compare = a[currentSortKey] < b[currentSortKey] ? -1 : 1;
-                return sortAscending ? compare : -compare;
-            });
+        filteredBoosts.sort((a, b) => {
+            let compare = a[currentSortKey] < b[currentSortKey] ? -1 : 1;
+            return sortAscending ? compare : -compare;
+        });
 
+        boostsTable.innerHTML = filteredBoosts.map(boost => `
+            <tr class="border-b border-gray-700">
+                <td class="px-4 py-3">${new Date(boost.timestamp * 1000).toLocaleString()}</td>
+                <td class="px-4 py-3 truncate" title="${boost.podcast}">${boost.podcast}</td>
+                <td class="px-4 py-3 truncate" title="${boost.episode}">${boost.episode}</td>
+                <td class="px-4 py-3 sender" title="${boost.sender}">${boost.sender}</td>
+                <td class="px-4 py-3">${boost.message || ''}</td>
+                <td class="px-4 py-3 text-right">${boost.value}</td>
+            </tr>
+        `).join('');
+    }
 
-            boostsTable.innerHTML = filteredBoosts.map(boost => `
-                <tr class="border-b border-gray-700">
-                    <td class="px-4 py-3">${new Date(boost.timestamp * 1000).toLocaleString()}</td>
-                    <td class="px-4 py-3 truncate" title="${boost.podcast}">${boost.podcast}</td>
-                    <td class="px-4 py-3 truncate" title="${boost.episode}">${boost.episode}</td>
-                    <td class="px-4 py-3 sender" title="${boost.sender}">${boost.sender}</td>
-                    <td class="px-4 py-3">${boost.message || ''}</td>
-                    <td class="px-4 py-3 text-right">${boost.value}</td>
-                </tr>
-            `).join('');
+    podcastSelect.addEventListener('change', () => { updateEpisodeOptions(); updateSums(); renderTable(); });
+    episodeSelect.addEventListener('change', () => { updateSums(); renderTable(); });
+    onlyMessagesCheckbox.addEventListener('change', () => { updateSums(); renderTable(); });
 
-            updateSums();
-        }
-
-        podcastSelect.addEventListener('change', () => { updateEpisodeOptions(); renderTable(); });
-        episodeSelect.addEventListener('change', renderTable);
-        onlyMessagesCheckbox.addEventListener('change', renderTable);
-
-        updateEpisodeOptions();
-        renderTable();
-    </script>
+    updateEpisodeOptions();
+    updateSums();
+    renderTable();
+</script>
 </body>
 </html>
 '''
