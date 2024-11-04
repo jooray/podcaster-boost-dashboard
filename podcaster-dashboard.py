@@ -164,8 +164,6 @@ html_template = '''
         </table>
     </div>
 
-// ... (previous HTML and style content remains the same) ...
-
 <script>
     let boosts = @boosts_json;
     const podcastSelect = document.getElementById('podcast-select');
